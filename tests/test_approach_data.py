@@ -37,6 +37,12 @@ def test_edge_properties_do_not_copy() -> None:
     assert approach_data.edges_by_trial["t1"] is approach_data.edges_by_trial["t1"]
 
 
+def test_relcov_empty_intersection() -> None:
+    lhs = ApproachData({"t1": {1}})
+    rhs = ApproachData({"t1": {1}, "t2": {2}})
+    assert lhs.relcov(rhs, collection_reducer=CollectionReducer.INTERSECTION) == 1.0
+
+
 def test_edges_intersection() -> None:
     # single trial
     approach_data = ApproachData({"t1": {1, 2}})

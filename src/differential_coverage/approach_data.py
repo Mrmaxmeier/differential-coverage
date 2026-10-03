@@ -46,6 +46,10 @@ class ApproachData(Generic[TrialId, EdgeId]):
         collection_reducer: CollectionReducer = CollectionReducer.UNION,
     ) -> float:
         other_reduced = collection_reducer.reduce(other)
+        if not other_reduced:
+            # e.g. INTERSECTION of disjoint trials: nothing to cover, so every
+            # trial covers all of it.
+            return 1.0
         return value_reducer.reduce(
             len(edges.intersection(other_reduced)) / len(other_reduced)
             for edges in self.edges_by_trial.values()
