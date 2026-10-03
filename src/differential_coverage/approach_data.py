@@ -15,28 +15,29 @@ class ApproachData(Generic[TrialId, EdgeId]):
             if len(edges) == 0:
                 raise ValueError("Trial has no edges")
 
-        self._edges_by_trial: dict[TrialId, set[EdgeId]] = {
-            t: set(e) for t, e in trials.items()
+        # Stored immutable so the properties can hand them out without copying.
+        self._edges_by_trial: dict[TrialId, frozenset[EdgeId]] = {
+            t: frozenset(e) for t, e in trials.items()
         }
-        self._edges_union: set[EdgeId] = reduce(
+        self._edges_union: frozenset[EdgeId] = reduce(
             lambda x, y: x.union(y), iter(self._edges_by_trial.values())
         )
 
-        self._edges_intersection: set[EdgeId] = reduce(
+        self._edges_intersection: frozenset[EdgeId] = reduce(
             lambda x, y: x.intersection(y), iter(self._edges_by_trial.values())
         )
 
     @property
     def edges_union(self) -> frozenset[EdgeId]:
-        return frozenset(self._edges_union)
+        return self._edges_union
 
     @property
     def edges_intersection(self) -> frozenset[EdgeId]:
-        return frozenset(self._edges_intersection)
+        return self._edges_intersection
 
     @property
     def edges_by_trial(self) -> Mapping[TrialId, frozenset[EdgeId]]:
-        return {t: frozenset(e) for t, e in self._edges_by_trial.items()}
+        return dict(self._edges_by_trial)
 
     def relcov(
         self,

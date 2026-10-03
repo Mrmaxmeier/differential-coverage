@@ -29,6 +29,14 @@ def test_edges_union() -> None:
     assert approach_data.edges_union == {1, 2, 3}
 
 
+def test_edge_properties_do_not_copy() -> None:
+    # relscore reads these once per edge; copying made it quadratic.
+    approach_data = ApproachData({"t1": {1, 2}, "t2": {2, 3}})
+    assert approach_data.edges_union is approach_data.edges_union
+    assert approach_data.edges_intersection is approach_data.edges_intersection
+    assert approach_data.edges_by_trial["t1"] is approach_data.edges_by_trial["t1"]
+
+
 def test_edges_intersection() -> None:
     # single trial
     approach_data = ApproachData({"t1": {1, 2}})

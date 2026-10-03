@@ -21,18 +21,15 @@ def _calculate_relscore(
     approaches_that_never_hit_edge: dict[EdgeId, set[ApproachId]],
 ) -> float:
     score = 0.0
-    trials_with_non_empty_cov = len(
-        [1 for trial in approach_data.edges_by_trial.values() if len(trial) > 0]
-    )
+    trials = list(approach_data.edges_by_trial.values())
+    trials_with_non_empty_cov = len([1 for trial in trials if len(trial) > 0])
     if trials_with_non_empty_cov == 0:
         warnings.warn("Approach has no trials with non-empty coverage")
         return 0.0
 
     for e in all_edges:
         approaches_that_never_hit_e = len(approaches_that_never_hit_edge[e])
-        trials_that_hit_e = len(
-            [1 for trial in approach_data.edges_by_trial.values() if e in trial]
-        )
+        trials_that_hit_e = len([1 for trial in trials if e in trial])
         score += (
             approaches_that_never_hit_e * trials_that_hit_e / trials_with_non_empty_cov
         )
