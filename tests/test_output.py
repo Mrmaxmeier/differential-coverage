@@ -113,6 +113,33 @@ def test_print_scores_respects_digits() -> None:
     assert captured == ["a: 0.3333"]
 
 
+def test_print_scores_latex_escapes_names() -> None:
+    """print_scores LaTeX output escapes special characters in approach names."""
+    captured, printer = _capture_printer()
+
+    print_scores({"afl_plus": 1.0}, output="latex", printer=printer)
+
+    assert r"afl\_plus & 1.000 \\" in captured
+
+
+def test_print_scores_latex_color_escapes_names() -> None:
+    """Colored print_scores LaTeX output escapes approach names."""
+    captured, printer = _capture_printer()
+
+    print_scores({"a&b": 1.0}, output="latex", latex_enable_color=True, printer=printer)
+
+    assert any(line.startswith(r"a\&b & \cellcolor") for line in captured)
+
+
+def test_print_counts_latex_escapes_names() -> None:
+    """print_counts LaTeX output escapes special characters in approach names."""
+    captured, printer = _capture_printer()
+
+    print_counts({"50%_seeds": 3}, output="latex", printer=printer)
+
+    assert r"50\%\_seeds & 3 \\" in captured
+
+
 def test_print_counts_uses_printer_stdout() -> None:
     """print_counts writes integer coverage counts via the provided printer."""
     counts = {"b": 2, "a": 5}

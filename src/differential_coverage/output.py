@@ -148,14 +148,25 @@ def _print_scores_latex(
         values = [s for _, s in performance_sorted]
         min_v, max_v = _norm_minmax(values)
     for approach, score in performance_sorted:
+        name = _escape_latex(str(approach))
         formatted = _format_float(score, digits)
         if enable_color:
             n = _norm_value(score, min_v, max_v)
             hex_color = _colormap_light_hex(n, colormap=colormap)
-            printer(rf"{approach} & \cellcolor[HTML]{{{hex_color}}}{{{formatted}}} \\")
+            printer(rf"{name} & \cellcolor[HTML]{{{hex_color}}}{{{formatted}}} \\")
         else:
-            printer(f"{approach} & {formatted} \\\\")
+            printer(f"{name} & {formatted} \\\\")
     printer(r"\end{tabular}")
+
+
+def _escape_latex(text: str) -> str:
+    try:
+        from pylatex.utils import (  # type: ignore[import-untyped] # does not provide types
+            escape_latex,
+        )
+    except ImportError:
+        raise ImportError('latex support requires the "latex" optional dependencies')
+    return str(escape_latex(text))
 
 
 def print_relcov_corpus_table(
@@ -304,13 +315,6 @@ def _print_relcov_corpus_table_latex(
     digits: int,
     printer: Callable[[str], None],
 ) -> None:
-    try:
-        from pylatex.utils import (  # type: ignore[import-untyped] # does not provide types
-            escape_latex,
-        )
-    except ImportError:
-        raise ImportError('latex support requires the "latex" optional dependencies')
-
     """LaTeX table (optionally with data cells colored by global min/max)."""
     row_labels = sorted(table.keys())
     col_labels = sorted(corpus_approaches)
@@ -324,12 +328,12 @@ def _print_relcov_corpus_table_latex(
     _latex_print_rotcol_command(angle=rotate_headers, printer=printer)
     printer(r"\begin{tabular}{" + align_spec + r"}")
     header_cells = [""] + [
-        _latex_rotcol(escape_latex(str(c)), angle=rotate_headers) for c in col_labels
+        _latex_rotcol(_escape_latex(str(c)), angle=rotate_headers) for c in col_labels
     ]
     printer("\t" + " & ".join(header_cells) + r" \\")
     printer(r"\hline")
     for row in row_labels:
-        cells: list[str] = [escape_latex(str(row))]
+        cells: list[str] = [_escape_latex(str(row))]
         for c in col_labels:
             val = table[row].get(c)
             if val is None:
