@@ -159,6 +159,67 @@ def test_branch_edges_uses_source_path(tmp_path: Path) -> None:
     assert edges == {"fn:main@/src/other.c:5:13-5:17:false"}
 
 
+# main() at m.c:10 and m.c:11 both expand CHECK, defined at m.c:2 (file IDs 1, 2).
+_TWO_EXPANSIONS: dict[str, object] = {
+    "name": "main",
+    "filenames": ["m.c", "m.c", "m.c"],
+    "regions": [
+        [10, 5, 10, 10, 1, 0, 1, 1],
+        [11, 5, 11, 10, 1, 0, 2, 1],
+        [2, 27, 2, 31, 1, 1, 0, 0],
+        [2, 33, 2, 46, 1, 1, 0, 0],
+        [2, 27, 2, 31, 1, 2, 0, 0],
+        [2, 33, 2, 46, 0, 2, 0, 0],
+    ],
+    "branches": [
+        [2, 27, 2, 31, 1, 0, 1, 0, 4],
+        [2, 27, 2, 31, 0, 1, 2, 0, 4],
+    ],
+}
+
+
+def test_block_edges_distinguish_macro_expansions(tmp_path: Path) -> None:
+    export = tmp_path / "t.json"
+    _write_export(export, [_TWO_EXPANSIONS])
+    edges = llvm_cov.read(export, granularity="block")
+    assert edges == {
+        "fn:main@m.c:10:5-10:10>m.c:2:27-2:31",
+        "fn:main@m.c:10:5-10:10>m.c:2:33-2:46",
+        "fn:main@m.c:11:5-11:10>m.c:2:27-2:31",
+    }
+
+
+def test_branch_edges_distinguish_macro_expansions(tmp_path: Path) -> None:
+    export = tmp_path / "t.json"
+    _write_export(export, [_TWO_EXPANSIONS])
+    edges = llvm_cov.read(export, granularity="branch")
+    assert edges == {
+        "fn:main@m.c:10:5-10:10>m.c:2:27-2:31:true",
+        "fn:main@m.c:11:5-11:10>m.c:2:27-2:31:false",
+    }
+
+
+def test_edges_qualify_nested_macro_expansions(tmp_path: Path) -> None:
+    export = tmp_path / "t.json"
+    _write_export(
+        export,
+        [
+            {
+                "name": "main",
+                "filenames": ["m.c", "m.h", "m.h"],
+                # m.c:10 expands OUTER (m.h:3), whose body expands INNER (m.h:1).
+                "regions": [
+                    [10, 5, 10, 12, 1, 0, 1, 1],
+                    [3, 20, 3, 25, 1, 1, 2, 1],
+                    [1, 18, 1, 30, 1, 2, 0, 0],
+                ],
+            }
+        ],
+    )
+    edges = llvm_cov.read(export, granularity="block")
+    assert edges == {"fn:main@m.c:10:5-10:12>m.h:3:20-3:25>m.h:1:18-1:30"}
+
+
 def test_read_raises_on_missing_filenames(tmp_path: Path) -> None:
     export = tmp_path / "t.json"
     _write_export(export, [{"name": "main", "regions": [[1, 1, 1, 5, 1, 0, 0, 0]]}])

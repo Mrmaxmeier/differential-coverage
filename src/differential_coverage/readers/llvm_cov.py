@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 from differential_coverage.readers.registry import (
@@ -15,21 +16,53 @@ _LINE_END = 2
 _COLUMN_END = 3
 _EXEC_COUNT = 4
 _REGION_FILE_ID = 5
+_REGION_EXPANDED_FILE_ID = 6
 _REGION_KIND = 7
 _BRANCH_FALSE_COUNT = 5
 _BRANCH_FILE_ID = 6
 
-# RegionKind::CodeRegion in include/llvm/ProfileData/CoverageMapping.h
+# RegionKind in include/llvm/ProfileData/CoverageMapping.h
 _CODE_REGION = 0
+_EXPANSION_REGION = 1
 _LLVM_EXPORT_MARKER = b"llvm.coverage.json.export"
 
 
-def _edge_id(scope: str, filenames: list[str], file_id: int, record: list[int]) -> str:
+def _location(record: list[int]) -> str:
     return (
-        f"{scope}@{filenames[file_id]}:"
         f"{record[_LINE_START]}:{record[_COLUMN_START]}-"
         f"{record[_LINE_END]}:{record[_COLUMN_END]}"
     )
+
+
+def _file_keys(filenames: list[str], regions: list[list[int]]) -> Callable[[int], str]:
+    """Map file IDs to filenames qualified by their macro expansion call sites.
+
+    Code inside a macro is reported at the macro definition, in a virtual file
+    per expansion. Without the call site, all expansions of one macro would
+    share edge IDs, conflating coverage of unrelated call sites.
+    """
+    call_sites = {
+        region[_REGION_EXPANDED_FILE_ID]: region
+        for region in regions
+        if region[_REGION_KIND] == _EXPANSION_REGION
+    }
+    keys: dict[int, str] = {}
+
+    def key(file_id: int) -> str:
+        if file_id not in keys:
+            site = call_sites.get(file_id)
+            if site is None:
+                keys[file_id] = filenames[file_id]
+            else:
+                parent = key(site[_REGION_FILE_ID])
+                keys[file_id] = f"{parent}:{_location(site)}>{filenames[file_id]}"
+        return keys[file_id]
+
+    return key
+
+
+def _edge_id(scope: str, file_key: str, record: list[int]) -> str:
+    return f"{scope}@{file_key}:{_location(record)}"
 
 
 def read(path: Path, *, granularity: Granularity) -> set[str]:
@@ -40,20 +73,21 @@ def read(path: Path, *, granularity: Granularity) -> set[str]:
     for export in data.get("data", []):
         for function in export.get("functions", []):
             scope = f"fn:{function['name']}"
-            filenames = function["filenames"]
+            regions = function.get("regions", [])
+            file_key = _file_keys(function["filenames"], regions)
 
             if granularity == "branch":
                 for branch in function.get("branches", []):
-                    base = _edge_id(scope, filenames, branch[_BRANCH_FILE_ID], branch)
+                    base = _edge_id(scope, file_key(branch[_BRANCH_FILE_ID]), branch)
                     if branch[_EXEC_COUNT] > 0:
                         edges.add(f"{base}:true")
                     if branch[_BRANCH_FALSE_COUNT] > 0:
                         edges.add(f"{base}:false")
             else:
-                for region in function.get("regions", []):
+                for region in regions:
                     if region[_EXEC_COUNT] > 0 and region[_REGION_KIND] == _CODE_REGION:
                         edges.add(
-                            _edge_id(scope, filenames, region[_REGION_FILE_ID], region)
+                            _edge_id(scope, file_key(region[_REGION_FILE_ID]), region)
                         )
     if not edges:
         raise ValueError(f"No covered edges in {path}")
